@@ -11,14 +11,13 @@ class AppController {
     if (dbClient.isAlive() && redisClient.isAlive()) {
       return response.status(200).json({ redis: true, db: true });
     }
-    if (!dbClient.isAlive() || !redisClient.isAlive()) {
-      if (dbClient.isAlive()) {
-        response.status(200).json({ redis: false, db: true });
-      } else if (redisClient.isAlive()) {
-        response.status(200).json({ redis: true, db: false });
-      }
+    if (!dbClient.isAlive() && !redisClient.isAlive()) {
+      return response.status(200).json({ redis: false, db: false });
     }
-    return response.status(200).json({ redis: false, db: false });
+    if (!dbClient.isAlive()) {
+      return response.status(200).json({ redis: true, db: false });
+    }
+    return response.status(200).json({ redis: true, db: false });
   }
 
   /**
