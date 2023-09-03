@@ -1,10 +1,12 @@
+import redisClient from './redis';
+
 /**
  * Decodes the token from the `Authorization` header key
  * @param {*} request request object
  * @returns an resolved promise object containing the decoded string
  * i.e user's `email` and `password`, otherwise an empty object
  */
-export default function decodeAuthToken(request) {
+export function decodeAuthHeader(request) {
   return new Promise((resolve, reject) => {
     // get `Authorization` header
     const authValue = request.get('authorization');
@@ -26,4 +28,18 @@ export default function decodeAuthToken(request) {
 
     return resolve({ email, password });
   });
+}
+
+/**
+ * gets a `auth_x-token` value from redis
+ * @param {*} request
+ * @returns a userId value or null
+ */
+export async function authTokenInRedis(request) {
+  const userToken = `auth_${request.get('x-token')}`;
+  const userId = await redisClient.get(userToken);
+  if (!userId) {
+    return null;
+  }
+  return userId;
 }

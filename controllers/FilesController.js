@@ -1,16 +1,21 @@
 import { ObjectId } from 'mongodb';
 
 import dbClient from '../utils/db';
-import redisClient from '../utils/redis';
+import { authTokenInRedis } from '../utils/decodeAuthToken';
 import saveFile from '../utils/savefile';
 
 const fileTypes = ['file', 'image', 'folder'];
 
 class FilesController {
+  /**
+   * Upload a file
+   * @param {request} request request object
+   * @param {response} response response object
+   * @returns a response
+   */
   static async postUpload(request, response) {
     try {
-      const userToken = `auth_${request.get('x-token')}`;
-      const userId = await redisClient.get(userToken);
+      const userId = await authTokenInRedis(request);
       if (!userId) {
         return response.status(401).json({ error: 'Unauthorized' });
       }
@@ -60,6 +65,108 @@ class FilesController {
     } catch (error) {
       return response.status(400).json({ error: 'Unauthorized' });
     }
+  }
+
+  /**
+   * gets a file based on the `id`
+   * @param {*} request
+   * @param {*} response
+   * @returns a response object
+   */
+  static async getShow(request, response) {
+    // get fileId and authenticate user
+    const fileId = request.params.id;
+    const userId = await authTokenInRedis(request);
+    if (!userId) {
+      return response.status(401).json({ error: 'Unauthorized' });
+    }
+    // get possible owner
+    const owner = await dbClient.db.collection('users').findOne({ _id: new ObjectId(userId) });
+
+    // find document based on userId and fileId
+    const file = await dbClient.db.collection('files').findOne(
+      {
+        $and: [
+          { _id: new ObjectId(fileId) },
+          { userId: new ObjectId(owner._id) },
+        ],
+      },
+      {
+        projection: {
+          _id: 0,
+          id: '$_id',
+          userId: 1,
+          name: 1,
+          type: 1,
+          isPublic: 1,
+          parentId: 1,
+        },
+      },
+    );
+    if (!file) {
+      return response.status(404).json({ error: 'Not found' });
+    }
+    return response.status(200).json(file);
+  }
+
+  /**
+   * gets files of type `image` or `file` that are linked to a folder
+   * with a specific `parentId`. If the `parentId` is undefined, default is `0`.
+   * The returned array is paginated based on the `page` number in the query
+   * parameter. If `page` is undefined, default is 0.
+   * @param {request} request request object
+   * @param {response} response response object
+   * @returns a response object with a json array
+   */
+  static async getIndex(request, response) {
+    const userId = await authTokenInRedis(request);
+    if (!userId) {
+      return response.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // check request query for parentId and page
+    let parentIdValue = request.query.parentId;
+
+    if (parentIdValue === '0') {
+      parentIdValue = parseInt(parentIdValue, 10);
+    } else if (!parentIdValue) {
+      parentIdValue = 0;
+    } else {
+      parentIdValue = new ObjectId(parentIdValue);
+    }
+    const page = !request.query.page ? 0 : parseInt(request.query.page, 10);
+
+    console.log(typeof parentIdValue, typeof page, userId);
+
+    // aggregate files and paginate by page number and limit
+    const limitPerPage = 20;
+    const toSkip = limitPerPage * page;
+    const filesInFolder = await dbClient.db.collection('files').aggregate([
+      {
+        $match:
+        {
+          $and: [
+            { userId: new ObjectId(userId) },
+            { parentId: parentIdValue },
+            { type: { $in: ['file', 'image'] } },
+          ],
+        },
+      },
+      { $skip: toSkip },
+      { $limit: limitPerPage },
+      {
+        $project: {
+          _id: 0,
+          id: '$_id',
+          userId: 1,
+          name: 1,
+          type: 1,
+          isPublic: 1,
+          parentId: 1,
+        },
+      },
+    ]).toArray();
+    return response.status(200).json(filesInFolder);
   }
 }
 
