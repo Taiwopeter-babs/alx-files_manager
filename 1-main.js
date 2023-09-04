@@ -1,5 +1,11 @@
 // import dbClient from './utils/db';
+const mime = require('mime-types');
+const imageThumbnail = require('image-thumbnail');
 
+imageThumbnail('/home/taiwop/alan.jpg', { width: 500 })
+  .then((thumbnail) => { console.log(thumbnail); });
+
+console.log(mime.lookup('image.js'));
 // const waitConnection = () => new Promise((resolve, reject) => {
 //   let i = 0;
 //   const repeatFct = async () => {

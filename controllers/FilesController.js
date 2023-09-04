@@ -2,8 +2,9 @@ import { ObjectId } from 'mongodb';
 
 import dbClient from '../utils/db';
 import { authTokenInRedis } from '../utils/decodeAuthToken';
-import saveFile from '../utils/savefile';
+import { saveFile, getFile } from '../utils/savefile';
 import publishAndUnpublish from '../utils/publishAndUnpublish';
+import addJobToQueue from '../worker';
 
 const fileTypes = ['file', 'image', 'folder'];
 
@@ -60,8 +61,15 @@ class FilesController {
         const newFile = await dbClient.db.collection('files').insertOne(toSave);
         return response.status(201).json({ id: newFile.insertedId, ...toSave });
       }
-      // save file of type `file||image` to file
+
+      // save file of type `file||image` to database
       const newFileInfo = await saveFile(data, toSave);
+
+      // add file of type image to queue for generating thumbnails
+      if (type === 'image') {
+        await addJobToQueue({ fileId: newFileInfo.id, userId: newFileInfo.userId });
+      }
+
       return response.status(201).json(newFileInfo);
     } catch (error) {
       return response.status(400).json({ error: 'Unauthorized' });
@@ -213,6 +221,39 @@ class FilesController {
       return response.status(404).json({ error: 'Not found' });
     }
     return response.status(200).json(updatedDoc);
+  }
+
+  /**
+   * gets the content of a file and sets its mime-type
+   * @param {*} request
+   * @param {*} response
+   * @returns a response object
+   */
+  static async getFile(request, response) {
+    // authenticate user
+    const userId = await authTokenInRedis(request);
+    if (!userId) {
+      return response.status(404).json({ error: 'Not found' });
+    }
+    // get file
+    const owner = await dbClient.db.collection('users').findOne({ _id: new ObjectId(userId) });
+    const fileId = request.params.id;
+
+    // get size query to return image of correct size
+    const { size } = request.query;
+
+    // get file content and mime-type
+    try {
+      const { fileData, fileMimeType } = await getFile(fileId, owner._id, size);
+      response.set('Content-Type', fileMimeType);
+      return response.status(200).send(fileData);
+    } catch (error) {
+      if (error.message === 'Not found') {
+        return response.status(404).json({ error: 'Not found' });
+      }
+      // folder error caught
+      return response.status(400).json({ error: 'A folder doesn\'t have content' });
+    }
   }
 }
 
