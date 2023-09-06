@@ -2,10 +2,15 @@
 const mime = require('mime-types');
 const imageThumbnail = require('image-thumbnail');
 
-imageThumbnail('/home/taiwop/alan.jpg', { width: 500 })
-  .then((thumbnail) => { console.log(thumbnail); });
+// imageThumbnail('/home/taiwop/alan.jpg', { width: 500 })
+//   .then((thumbnail) => { console.log(thumbnail); });
 
-console.log(mime.lookup('image.js'));
+// console.log(mime.lookup('image.js'));
+const base64Code = Buffer.from('test@email.com:testpassword').toString('base64');
+console.log(base64Code);
+
+const generatedBase64 = 'dGVzdEBlbWFpbC5jb206dGVzdHBhc3N3b3Jk';
+// console.log(Buffer.from(generatedBase64, 'base64').toString('utf-8'));
 // const waitConnection = () => new Promise((resolve, reject) => {
 //   let i = 0;
 //   const repeatFct = async () => {

@@ -10,10 +10,19 @@ import { saveImageThumbnail } from './utils/savefile';
  * @param {job} job job to be added; an object with
  * properties `userId` and `fileId`
  */
-export default async function addJobToQueue(job) {
+export async function addJobToQueue(job) {
   // create a queue
   const fileQueue = new Queue('fileQueue');
   await fileQueue.add(job);
+}
+
+/**
+ * ### add job to `userQueue`
+ * @param {job} job job to be added; with property userId
+ */
+export async function addJobToUserQueue(job) {
+  const userQueue = new Queue('userQueue');
+  await userQueue.add(job);
 }
 
 /**
@@ -22,7 +31,7 @@ export default async function addJobToQueue(job) {
  * @param {job} job job to be added and processed; an object with
  * properties `userId` and `fileId`
  */
-async function processJobs() {
+async function processFileJobs() {
   const fileQueue = new Queue('fileQueue');
   // process jobs in queue;
   fileQueue.process(async (job, done) => {
@@ -56,4 +65,23 @@ async function processJobs() {
   });
 }
 
-processJobs();
+async function processUserJobs() {
+  const userQueue = new Queue('userQueue');
+
+  userQueue.process(async (job, done) => {
+    // validate job data
+    if (!job.data.userId) throw new Error('Missing userId');
+
+    // check if user exists
+    const user = await dbClient.db.collection('users').findOne(
+      { _id: new ObjectId(job.data.userId) },
+    );
+    if (!user) throw new Error('User not found');
+
+    console.log(`Welcome ${user.email}`);
+    done();
+  });
+}
+
+processFileJobs();
+processUserJobs();

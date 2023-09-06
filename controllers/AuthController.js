@@ -9,25 +9,29 @@ import { decodeAuthHeader, authTokenInRedis } from '../utils/decodeAuthToken';
 class AuthController {
   static async getConnect(request, response) {
     // get `Authorization` header and parse
-    const { email, password } = await decodeAuthHeader(request);
-    if (!email || !password) {
+    try {
+      const { email, password } = await decodeAuthHeader(request);
+      // if (!email || !password) {
+      //   return response.status(401).json({ error: 'Unauthorized' });
+      // }
+
+      const user = await dbClient.getUser(email);
+      if (!user) {
+        return response.status(401).json({ error: 'Unauthorized' });
+      }
+      if (user.password !== sha1(password)) {
+        return response.status(401).json({ error: 'Unauthorized' });
+      }
+      const token = uuidv4();
+      const tokenKey = `auth_${token}`;
+
+      // save key in redis with userId as the value
+      await redisClient.set(tokenKey, user._id.toString(), 86400);
+
+      return response.status(200).json({ token });
+    } catch (error) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
-
-    const user = await dbClient.getUser(email);
-    if (!user) {
-      return response.status(401).json({ error: 'Unauthorized' });
-    }
-    if (user.password !== sha1(password)) {
-      return response.status(401).json({ error: 'Unauthorized' });
-    }
-    const token = uuidv4();
-    const tokenKey = `auth_${token}`;
-
-    // save key in redis with userId as the value
-    await redisClient.set(tokenKey, user._id.toString(), 86400);
-
-    return response.status(200).json({ token });
   }
 
   /**

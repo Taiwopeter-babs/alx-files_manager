@@ -2,6 +2,7 @@ import sha1 from 'sha1';
 import { ObjectId } from 'mongodb';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
+import { addJobToUserQueue } from '../worker';
 
 class UsersController {
   /**
@@ -23,6 +24,9 @@ class UsersController {
     }
     const hashedPwd = sha1(password);
     const newUser = await dbClient.saveUser(email, hashedPwd);
+
+    // add userId to queue for welcome email
+    await addJobToUserQueue({ userId: newUser.insertedId });
 
     return response.status(201).json({ id: newUser.insertedId, email });
   }

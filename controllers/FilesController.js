@@ -4,7 +4,7 @@ import dbClient from '../utils/db';
 import { authTokenInRedis } from '../utils/decodeAuthToken';
 import { saveFile, getFile } from '../utils/savefile';
 import publishAndUnpublish from '../utils/publishAndUnpublish';
-import addJobToQueue from '../worker';
+import { addJobToQueue } from '../worker';
 
 const fileTypes = ['file', 'image', 'folder'];
 
@@ -30,7 +30,7 @@ class FilesController {
       // validate input
       if (!name) return response.status(400).json({ error: 'Missing name' });
       if (!type || fileTypes.indexOf(type) === -1) {
-        return response.status(401).json({ error: 'Missing type' });
+        return response.status(400).json({ error: 'Missing type' });
       }
       if (!data && type !== 'folder') {
         return response.status(400).json({ error: 'Missing data' });
@@ -136,19 +136,25 @@ class FilesController {
     // check request query for parentId and page
     // regex to check for hexadecimal if string is not 0, the default parentId
     const checkDigit = /[0-9a-fA-F]{6}/g;
+    const checkPage = /^[0-9]+$/g;
 
     let parentIdValue = request.query.parentId;
+    let pageValue = request.query.page;
 
     if (parentIdValue === '0' || !parentIdValue || !checkDigit.test(parentIdValue)) {
       parentIdValue = 0;
     } else {
       parentIdValue = new ObjectId(parentIdValue);
     }
-    const page = !request.query.page ? 0 : parseInt(request.query.page, 10);
+    if (!checkPage.test(pageValue) || !pageValue) {
+      pageValue = 0;
+    } else {
+      pageValue = parseInt(pageValue, 10);
+    }
 
     // aggregate files and paginate by page number and limit
     const limitPerPage = 20;
-    const toSkip = limitPerPage * page;
+    const toSkip = limitPerPage * pageValue;
     const filesInFolder = await dbClient.db.collection('files').aggregate([
       {
         $match:
